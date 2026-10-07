@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>体外沙箱 · 客户端脚本模拟试玩</title>
+<style>
+  :root {
+    --bg: #0b0f13; --panel: #131a21; --line: #232c36; --text: #d7e0ea;
+    --dim: #7d8b9a; --ok: #7ee787; --warn: #f0b849; --err: #ff7b72; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; }
+  .badge.pass { background: rgba(126,231,135,.15); color: var(--ok); }
+  .badge.warn { background: rgba(240,184,73,.15); color: var(--warn); }
+  .badge.fail { background: rgba(255,123,114,.15); color: var(--err); }
+  .stat { color: var(--dim); }
+  .stat b { color: var(--text); font-weight: 600; }
+  main { display: grid; grid-template-columns: 340px 1fr 360px; gap: 12px; padding: 12px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: var(--dim); font-weight: 600; letter-spacing: .04em; }
+  textarea {
+    width: 100%; min-height: 200px; resize: vertical; background: #0e1419; color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px;
+    font: 12px/1.5 ui-monospace, Consolas, monospace;
+  }
+  textarea.small { min-height: 64px; }
+  label { display: block; color: var(--dim); margin: 8px 0 4px; font-size: 12px; }
+  input[type=number], select, input[type=file] {
+    background: #0e1419; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 7px; width: 100%;
+  }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .row > * { flex: 1; }
+  .row.tight > * { flex: 0 0 auto; }
+  button {
+    background: #1b2530; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+  }
+  button:hover { border-color: var(--accent); color: #fff; }
+  button.primary { background: #17324d; border-color: #1f4b73; }
+  #stage { display: flex; justify-content: center; align-items: flex-start; }
+  #view { border: 1px solid var(--line); border-radius: 6px; cursor: crosshair; background: #101418; }
+  #log, #report, #tree, #unsupported {
+    font: 11px/1.45 ui-monospace, Consolas, monospace; max-height: 220px; overflow: auto;
+    background: #0e1419; border: 1px solid var(--line); border-radius: 6px; padding: 6px;
+  }
+  #report { max-height: 320px; white-space: pre-wrap; }
+  .log-print { color: var(--text); }
+  .log-info { color: var(--dim); }
+  .log-error { color: var(--err); }
+  .log-warn { color: var(--warn); }
+  .node { white-space: nowrap; }
+  .node .id { color: var(--accent); }
+  .node .dim, .dim { color: var(--dim); }
+  .node .warn, .warn { color: var(--warn); }
+  .fatal { background: #3d1d1d; color: #ffb4ab; padding: 10px 14px; font-weight: 600; }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>体外沙箱 · 客户端脚本模拟试玩</h1>
+  <span id="verdict" class="badge">未运行</span>
+  <span class="stat">帧 <b id="stat-frame">0</b></span>
+  <span class="stat">虚拟时间 <b id="stat-time">0.0s</b></span>
+  <span class="stat">存活 <b id="stat-alive">0</b></span>
+  <span class="stat">创建 <b id="stat-created">0</b></span>
+  <span class="stat">销毁 <b id="stat-destroyed">0</b></span>
+  <span class="stat">建了没用 <b id="stat-never">0</b></span>
+  <span class="stat">每帧 setter <b id="stat-setters">0</b></span>
+  <span class="stat">错误 <b id="stat-errors">0</b></span>
+  <span class="spacer"></span>
+  <span class="dim">Lua 5.3 · 离线运行</span>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>脚本</h2>
+    <label>levelScript.lua（可直接粘贴，或选文件 / 拖进来）</label>
+    <textarea id="script" spellcheck="false" placeholder="-- 把生成的 levelScript.lua 粘到这里"></textarea>
+    <div class="row tight">
+      <input type="file" id="file" accept=".lua,.txt">
+    </div>
+    <label>接口标注（可选，annotations.lua：真实常量优先）</label>
+    <textarea id="annotations" class="small" spellcheck="false" placeholder="-- 可留空"></textarea>
+    <div class="row tight"><input type="file" id="file-ann" accept=".lua,.txt"></div>
+
+    <h2 style="margin-top:14px">运行</h2>
+    <label>设备形态（分辨率矩阵）</label>
+    <select id="preset"></select>
+    <div class="row">
+      <button id="btn-load" class="primary">装载</button>
+      <button id="btn-start" class="primary">启动</button>
+    </div>
+    <div class="row">
+      <button id="btn-play">暂停</button>
+      <button id="btn-step">单步</button>
+      <button id="btn-destroy">销毁</button>
+    </div>
+
+    <h2 style="margin-top:14px">模拟试玩</h2>
+    <div class="grid2">
+      <div><label>轰炸时长 ms</label><input type="number" id="fuzz-ms" value="3000" step="500"></div>
+      <div><label>随机种子</label><input type="number" id="fuzz-seed" value="20260101"></div>
+    </div>
+    <div class="row">
+      <button id="btn-fuzz">随机输入轰炸</button>
+      <button id="btn-report">出报告</button>
+      <button id="btn-reset">重置</button>
+    </div>
+    <div class="hint">画布上直接点就是点击事件；退出前点「销毁」能顺带验证 OnDestroy 有没有漏清理。</div>
+  </section>
+
+  <section class="panel">
+    <h2>画布（虚拟坐标，原点左下）</h2>
+    <div id="stage"><canvas id="view" width="800" height="450"></canvas></div>
+    <h2 style="margin-top:12px">控件树</h2>
+    <div id="tree"></div>
+  </section>
+
+  <section class="panel">
+    <h2>日志</h2>
+    <div id="log"></div>
+    <h2 style="margin-top:12px">未支持的 API</h2>
+    <div id="unsupported"></div>
+    <h2 style="margin-top:12px">报告</h2>
+    <div id="report"></div>
+  </section>
+</main>
+
+<!-- 顺序不能变：先虚拟机，再沙箱核心，最后宿主 -->
+<script src="vendor/fengari.bundle.js"></script>
+<script src="qx-sandbox.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# 统一用 LF 存储，避免 Windows 上反复出现行尾改动
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.wasm binary

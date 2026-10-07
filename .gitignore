@@ -1,0 +1,19 @@
+# 生成物与缓存
+release/tools/tests/out/
+__pycache__/
+*.pyc
+node_modules/
+
+# 不发布：开发版提示词包（含第三方技能目录，仅本地保留）
+with_tools/
+
+# 打包与分发
+dist/
+*.zip
+*.7z
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
